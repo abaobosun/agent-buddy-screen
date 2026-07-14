@@ -241,3 +241,21 @@ body {
   background: #0a0f15;
   font-family: Consolas, "Cascadia Mono", monospace;
 }
+
+.session {
+  appearance: none;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.session.selected {
+  color: var(--text);
+  background: rgba(126, 231, 135, 0.12);
+  outline: 1px solid var(--accent);
+}
+.session.selected::before { content: "> "; color: var(--accent); }

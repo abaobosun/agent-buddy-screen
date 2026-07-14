@@ -1,5 +1,6 @@
 (function () {
   var activeAgent = "codex";
+  var selectedSessionId = "";
 
   function byId(id) {
     return document.getElementById(id);
@@ -33,11 +34,19 @@
     root.innerHTML = "";
     sessions = sessions || [];
     for (var i = 0; i < sessions.length && i < 5; i++) {
-      var session = sessions[i];
-      var item = document.createElement("div");
-      item.className = "session" + (session.state === "active" ? " active" : "");
-      item.textContent = String(session.name || "Session") + " " + String(session.updated_at || "");
-      root.appendChild(item);
+      (function (session) {
+        var item = document.createElement("button");
+        var selected = Boolean(session.selected || (session.id && session.id === selectedSessionId));
+        item.type = "button";
+        item.className = "session" + (session.state === "active" ? " active" : "") + (selected ? " selected" : "");
+        item.textContent = String(session.name || "Session") + " " + String(session.updated_at || "");
+        item.onclick = function () {
+          if (!session.id) return;
+          selectedSessionId = session.id;
+          refresh();
+        };
+        root.appendChild(item);
+      }(sessions[i]));
     }
     if (!root.children.length) root.innerHTML = '<div class="session">No sessions</div>';
   }
@@ -101,6 +110,7 @@
     setText("requests", usage.requests == null ? 0 : usage.requests);
     setText("tokens", formatNumber((usage.input_tokens || 0) + (usage.output_tokens || 0)));
     setText("latest-reply", state.latest_reply || "Unavailable");
+    selectedSessionId = app.selected_session_id || "";
     renderSessions(state.sessions || []);
     renderActivity(state.activity || []);
     renderSources(state);
@@ -117,7 +127,8 @@
 
   function refresh() {
     var xhr = new XMLHttpRequest();
-    xhr.open("GET", "/api/state?agent=" + encodeURIComponent(activeAgent) + "&t=" + Date.now(), true);
+    var sessionQuery = selectedSessionId ? "&session=" + encodeURIComponent(selectedSessionId) : "";
+    xhr.open("GET", "/api/state?agent=" + encodeURIComponent(activeAgent) + sessionQuery + "&t=" + Date.now(), true);
     xhr.onreadystatechange = function () {
       if (xhr.readyState !== 4) return;
       if (xhr.status >= 200 && xhr.status < 300) {
@@ -139,6 +150,7 @@
     for (var i = 0; i < buttons.length; i++) {
       buttons[i].onclick = function () {
         activeAgent = this.getAttribute("data-agent") || "codex";
+        selectedSessionId = "";
         for (var j = 0; j < buttons.length; j++) removeClass(buttons[j], "active");
         addClass(this, "active");
         refresh();

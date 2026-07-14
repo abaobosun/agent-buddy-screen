@@ -1,5 +1,6 @@
 const $ = (id) => document.getElementById(id);
 let activeAgent = "codex";
+let selectedSessionId = "";
 
 
 const resizeScreen = () => {
@@ -33,9 +34,17 @@ const renderSessions = (sessions = []) => {
     return;
   }
   for (const session of sessions.slice(0, 3)) {
-    const item = document.createElement("div");
-    item.className = `session ${session.state === "active" ? "active" : ""}`;
+    const item = document.createElement("button");
+    const selected = Boolean(session.selected || (session.id && session.id === selectedSessionId));
+    item.type = "button";
+    item.className = `session ${session.state === "active" ? "active" : ""} ${selected ? "selected" : ""}`;
     item.textContent = `${session.name} ${session.updated_at || ""}`;
+    item.title = `Show session: ${session.name || "Session"}`;
+    item.addEventListener("click", () => {
+      if (!session.id) return;
+      selectedSessionId = session.id;
+      refresh();
+    });
     root.appendChild(item);
   }
 };
@@ -96,6 +105,7 @@ const renderState = (state) => {
   const bar = $("context-bar");
   if (bar) bar.style.width = `${Math.max(0, Math.min(100, Number(context.percent || 0)))}%`;
 
+  selectedSessionId = app.selected_session_id || "";
   renderSessions(state.sessions || []);
   setText("approved", usage.requests ?? 0);
   setText("denied", formatNumber((usage.input_tokens || 0) + (usage.output_tokens || 0)));
@@ -118,6 +128,7 @@ const initAgentTabs = () => {
   document.querySelectorAll(".agent-tab").forEach((button) => {
     button.addEventListener("click", () => {
       activeAgent = button.dataset.agent || "codex";
+      selectedSessionId = "";
       document.querySelectorAll(".agent-tab").forEach((tab) => tab.classList.toggle("active", tab === button));
       refresh();
     });
@@ -126,7 +137,8 @@ const initAgentTabs = () => {
 
 const refresh = async () => {
   try {
-    const response = await fetch(`/api/state?agent=${activeAgent}`, { cache: "no-store" });
+    const sessionQuery = selectedSessionId ? `&session=${encodeURIComponent(selectedSessionId)}` : "";
+    const response = await fetch(`/api/state?agent=${activeAgent}${sessionQuery}`, { cache: "no-store" });
     const state = await response.json();
     renderState(state);
   } catch (error) {

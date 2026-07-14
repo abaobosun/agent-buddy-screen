@@ -131,3 +131,19 @@ body {
   .reply { font-size: 18px; }
   .activity-list { font-size: 16px; }
 }
+
+.session {
+  appearance: none;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+.session.selected {
+  background: rgba(0, 0, 0, .08);
+  outline: 1px solid var(--line);
+}
+.session.selected::before { content: "> "; color: var(--text); }

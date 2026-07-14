@@ -106,20 +106,21 @@ class AgentBuddyState:
         self.codex_sessions_root = self.codex_root / "sessions"
         self.claude_project_dir = home / ".claude" / "projects" / "D--Cursor-code"
         self.hermes_root = Path(os.environ.get("LOCALAPPDATA", str(home / "AppData" / "Local"))) / "hermes"
-        self._state_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        self._state_cache: dict[tuple[str, str], tuple[float, dict[str, Any]]] = {}
         self._project_cache: tuple[float, dict[str, Any]] | None = None
 
-    def build(self, agent: str = "codex") -> dict[str, Any]:
+    def build(self, agent: str = "codex", session_id: str | None = None) -> dict[str, Any]:
         agent = agent if agent in {"codex", "claude", "hermes"} else "codex"
+        cache_key = (agent, session_id or "")
         now = time.time()
-        cached = self._state_cache.get(agent)
+        cached = self._state_cache.get(cache_key)
         if cached and now - cached[0] < 5:
             return cached[1]
-        state = self._build_uncached(agent)
-        self._state_cache[agent] = (now, state)
+        state = self._build_uncached(agent, session_id)
+        self._state_cache[cache_key] = (now, state)
         return state
 
-    def _build_uncached(self, agent: str = "codex") -> dict[str, Any]:
+    def _build_uncached(self, agent: str = "codex", session_id: str | None = None) -> dict[str, Any]:
         agent = agent if agent in {"codex", "claude", "hermes"} else "codex"
         sources: dict[str, str] = {}
         errors: list[str] = []
@@ -131,15 +132,15 @@ class AgentBuddyState:
             errors.append(f"cc-switch: {cc_state['_error']}")
 
         if agent == "claude":
-            agent_state = self.claude_state()
+            agent_state = self.claude_state(session_id)
             sources["claude"] = agent_state.pop("_source_status")
             project = agent_state.get("project") or project
         elif agent == "hermes":
-            agent_state = self.hermes_state()
+            agent_state = self.hermes_state(session_id)
             sources["hermes"] = agent_state.pop("_source_status")
             project = agent_state.get("project") or {"name": "Hermes", "path": str(self.hermes_root), "branch": "gateway"}
         else:
-            agent_state = self.codex_state()
+            agent_state = self.codex_state(session_id)
             sources["codex"] = agent_state.pop("_source_status")
 
         if agent_state.get("_error"):
@@ -178,6 +179,7 @@ class AgentBuddyState:
                 "status": app_status,
                 "updated_at": hhmmss(),
                 "agent": agent,
+                "selected_session_id": agent_state.get("_selected_session_id"),
             },
             "project": project,
             "model": model,
@@ -386,16 +388,19 @@ class AgentBuddyState:
             events.append({"time": event_time.strftime("%H:%M"), "text": text, "_sort": event_time.timestamp()})
         return events
 
-    def claude_state(self) -> dict[str, Any]:
+    def claude_state(self, session_id: str | None = None) -> dict[str, Any]:
         files = sorted(self.claude_project_dir.glob("*.jsonl"), key=lambda p: p.stat().st_mtime, reverse=True) if self.claude_project_dir.exists() else []
         if not files:
             return {"_source_status": "error", "_error": f"missing {self.claude_project_dir}"}
-        latest = files[0]
-        rows = read_jsonl_tail(latest, max_lines=350)
+
+        selected = next((path for path in files if path.stem == session_id), files[0])
+        rows = read_jsonl_tail(selected, max_lines=350)
+        selected_id = selected.stem
         sessions = []
-        for path in files[:3]:
+        for path in files[:4]:
             updated = dt.datetime.fromtimestamp(path.stat().st_mtime).astimezone()
-            sessions.append({"name": f"Claude {path.stem[:6]}", "state": "active" if (now_local() - updated).total_seconds() < 7200 else "idle", "updated_at": updated.strftime("%H:%M")})
+            sessions.append({"id": path.stem, "name": f"Claude {path.stem[:6]}", "state": "active" if (now_local() - updated).total_seconds() < 7200 else "idle", "updated_at": updated.strftime("%H:%M"), "selected": path.stem == selected_id})
+
         latest_reply = "Unavailable"
         model_name = "Claude Code"
         used_tokens = 0
@@ -411,7 +416,6 @@ class AgentBuddyState:
                 model_name = str(msg.get("model"))
             usage = msg.get("usage") if isinstance(msg.get("usage"), dict) else {}
             used_tokens = used_tokens or safe_int(usage.get("input_tokens")) + safe_int(usage.get("output_tokens"))
-            role = msg.get("role") or row.get("type")
             text = self.extract_text(msg.get("content"))
             if row.get("type") == "assistant" and latest_reply == "Unavailable" and text:
                 latest_reply = truncate(text, 260)
@@ -419,18 +423,9 @@ class AgentBuddyState:
                 label = "assistant" if row.get("type") == "assistant" else "user" if row.get("type") == "user" else str(row.get("type") or "event")
                 content = truncate(text, 46) if text else label
                 activity.append({"time": ts.strftime("%H:%M") if ts else hhmm(), "text": f"{label}: {content}", "_sort": sort_key})
-        return {
-            "_source_status": "ok",
-            "project": project,
-            "model": {"provider": "Claude", "model": model_name, "app_type": "claude"},
-            "used_tokens": used_tokens,
-            "usage_today": self.empty_usage(),
-            "sessions": sessions,
-            "latest_reply": latest_reply,
-            "activity": activity,
-        }
+        return {"_source_status": "ok", "_selected_session_id": selected_id, "project": project, "model": {"provider": "Claude", "model": model_name, "app_type": "claude"}, "used_tokens": used_tokens, "usage_today": self.empty_usage(), "sessions": sessions, "latest_reply": latest_reply, "activity": activity}
 
-    def hermes_state(self) -> dict[str, Any]:
+    def hermes_state(self, session_id: str | None = None) -> dict[str, Any]:
         db_path = self.hermes_root / "state.db"
         gateway_path = self.hermes_root / "gateway_state.json"
         gateway_state = "unknown"
@@ -440,53 +435,18 @@ class AgentBuddyState:
                 gateway_state = str(gateway.get("gateway_state") or "unknown")
             except (OSError, json.JSONDecodeError):
                 gateway_state = "unknown"
-
         if not db_path.exists():
             return {"_source_status": "error", "_error": f"missing {db_path}"}
-
         try:
             con = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=1)
             con.row_factory = sqlite3.Row
-            active_rows = con.execute(
-                """
-                select id, source, model, title, started_at, ended_at, message_count,
-                       tool_call_count, input_tokens, output_tokens, cache_read_tokens,
-                       reasoning_tokens, cwd, git_branch, git_repo_root, session_key
-                from sessions
-                where ended_at is null and coalesce(archived, 0) = 0
-                order by started_at desc
-                limit 5
-                """
-            ).fetchall()
-            latest_sessions = con.execute(
-                """
-                select id, source, model, title, started_at, ended_at, message_count,
-                       tool_call_count, input_tokens, output_tokens, cache_read_tokens,
-                       reasoning_tokens, cwd, git_branch, git_repo_root, session_key
-                from sessions
-                where coalesce(archived, 0) = 0
-                order by started_at desc
-                limit 5
-                """
-            ).fetchall()
+            active_rows = con.execute("""select id, source, model, title, started_at, ended_at, message_count, tool_call_count, input_tokens, output_tokens, cache_read_tokens, reasoning_tokens, cwd, git_branch, git_repo_root, session_key from sessions where ended_at is null and coalesce(archived, 0) = 0 order by started_at desc limit 5""").fetchall()
+            latest_sessions = con.execute("""select id, source, model, title, started_at, ended_at, message_count, tool_call_count, input_tokens, output_tokens, cache_read_tokens, reasoning_tokens, cwd, git_branch, git_repo_root, session_key from sessions where coalesce(archived, 0) = 0 order by started_at desc limit 5""").fetchall()
             session_rows = active_rows or latest_sessions
-            latest_messages = con.execute(
-                """
-                select session_id, role, content, timestamp, tool_name
-                from messages
-                order by timestamp desc
-                limit 12
-                """
-            ).fetchall()
-            latest_reply_row = con.execute(
-                """
-                select session_id, content, timestamp
-                from messages
-                where role = 'assistant' and content is not null and length(content) > 0
-                order by timestamp desc
-                limit 1
-                """
-            ).fetchone()
+            selected_row = next((row for row in session_rows if row["id"] == session_id), session_rows[0] if session_rows else None)
+            selected_id = selected_row["id"] if selected_row else None
+            latest_messages = con.execute("""select session_id, role, content, timestamp, tool_name from messages where session_id = ? order by timestamp desc limit 12""", (selected_id,)).fetchall() if selected_id else []
+            latest_reply_row = con.execute("""select content, timestamp from messages where session_id = ? and role = 'assistant' and content is not null and length(content) > 0 order by timestamp desc limit 1""", (selected_id,)).fetchone() if selected_id else None
         except sqlite3.Error as exc:
             return {"_source_status": "error", "_error": str(exc)}
         finally:
@@ -494,108 +454,78 @@ class AgentBuddyState:
                 con.close()
             except Exception:
                 pass
-
-        active_count = len(active_rows)
-        primary = session_rows[0] if session_rows else None
-        model = primary["model"] if primary and primary["model"] else "Hermes Agent"
-        title = primary["title"] if primary and primary["title"] else "Hermes"
-        cwd = primary["cwd"] if primary and primary["cwd"] else str(self.hermes_root)
-        branch = primary["git_branch"] if primary and primary["git_branch"] else gateway_state
-        input_tokens = sum(safe_int(row["input_tokens"]) for row in session_rows)
-        output_tokens = sum(safe_int(row["output_tokens"]) for row in session_rows)
-        cache_tokens = sum(safe_int(row["cache_read_tokens"]) for row in session_rows)
-        api_calls = sum(safe_int(row["message_count"]) for row in session_rows)
-        tool_calls = sum(safe_int(row["tool_call_count"]) for row in session_rows)
-
+        model = selected_row["model"] if selected_row and selected_row["model"] else "Hermes Agent"
+        title = selected_row["title"] if selected_row and selected_row["title"] else "Hermes"
+        cwd = selected_row["cwd"] if selected_row and selected_row["cwd"] else str(self.hermes_root)
+        branch = selected_row["git_branch"] if selected_row and selected_row["git_branch"] else gateway_state
+        input_tokens = safe_int(selected_row["input_tokens"]) if selected_row else 0
+        output_tokens = safe_int(selected_row["output_tokens"]) if selected_row else 0
+        cache_tokens = safe_int(selected_row["cache_read_tokens"]) if selected_row else 0
+        message_count = safe_int(selected_row["message_count"]) if selected_row else 0
         sessions = []
         for row in session_rows[:4]:
             started = dt.datetime.fromtimestamp(float(row["started_at"] or time.time())).astimezone()
             state = "active" if row["ended_at"] is None else "idle"
             name = row["title"] or row["source"] or row["id"]
-            sessions.append({"name": truncate(str(name), 22), "state": state, "updated_at": started.strftime("%H:%M")})
-
-        latest_reply = "Unavailable"
-        if latest_reply_row and latest_reply_row["content"]:
-            latest_reply = truncate(str(latest_reply_row["content"]), 260)
-
+            sessions.append({"id": row["id"], "name": truncate(str(name), 22), "state": state, "updated_at": started.strftime("%H:%M"), "selected": row["id"] == selected_id})
+        latest_reply = truncate(str(latest_reply_row["content"]), 260) if latest_reply_row and latest_reply_row["content"] else "Unavailable"
         activity = []
         for row in latest_messages:
             ts = dt.datetime.fromtimestamp(float(row["timestamp"] or time.time())).astimezone()
-            role = row["role"] or "event"
             content = row["content"] or row["tool_name"] or ""
-            if row["tool_name"]:
-                label = f"tool {row['tool_name']}"
-            else:
-                label = str(role)
-            text = f"{label}: {truncate(str(content), 46)}" if content else label
-            activity.append({"time": ts.strftime("%H:%M"), "text": text, "_sort": ts.timestamp()})
-
+            label = f"tool {row['tool_name']}" if row["tool_name"] else str(row["role"] or "event")
+            activity.append({"time": ts.strftime("%H:%M"), "text": f"{label}: {truncate(str(content), 46)}" if content else label, "_sort": ts.timestamp()})
         status = "ok" if gateway_state == "running" or session_rows else "stale"
-        return {
-            "_source_status": status,
-            "project": {"name": truncate(str(title), 24), "path": str(cwd), "branch": str(branch)},
-            "model": {"provider": "Hermes", "model": str(model), "app_type": "hermes"},
-            "used_tokens": input_tokens + output_tokens,
-            "usage_today": {
-                "requests": active_count,
-                "input_tokens": input_tokens + cache_tokens,
-                "output_tokens": output_tokens,
-                "cost_usd": "0",
-            },
-            "sessions": sessions,
-            "latest_reply": latest_reply,
-            "activity": activity[:8] or [{"time": hhmm(), "text": f"Gateway {gateway_state}", "_sort": time.time()}],
-        }
+        return {"_source_status": status, "_selected_session_id": selected_id, "project": {"name": truncate(str(title), 24), "path": str(cwd), "branch": str(branch)}, "model": {"provider": "Hermes", "model": str(model), "app_type": "hermes"}, "used_tokens": input_tokens + output_tokens, "usage_today": {"requests": message_count, "input_tokens": input_tokens + cache_tokens, "output_tokens": output_tokens, "cost_usd": "0"}, "sessions": sessions, "latest_reply": latest_reply, "activity": activity[:8] or [{"time": hhmm(), "text": f"Gateway {gateway_state}", "_sort": time.time()}]}
 
-    def codex_state(self) -> dict[str, Any]:
+    def codex_state(self, session_id: str | None = None) -> dict[str, Any]:
         try:
             sessions = self.codex_sessions()
-            session_file = self.latest_codex_session_file()
+            session_file = self.codex_session_file(session_id) if session_id else self.latest_codex_session_file()
+            selected_id = self.codex_session_id(session_file) if session_file else None
             latest_reply = "Unavailable"
             activity: list[dict[str, Any]] = []
             if session_file:
                 rows = read_jsonl_tail(session_file)
                 latest_reply = self.latest_codex_reply(rows)
                 activity = self.codex_activity(rows)
-
+            for session in sessions:
+                session["selected"] = session.get("id") == selected_id
             status = "ok" if session_file or sessions else "stale"
-            return {
-                "_source_status": status,
-                "sessions": sessions,
-                "latest_reply": latest_reply,
-                "activity": activity,
-            }
+            return {"_source_status": status, "_selected_session_id": selected_id, "sessions": sessions, "latest_reply": latest_reply, "activity": activity}
         except Exception as exc:
-            return {
-                "_source_status": "error",
-                "_error": str(exc),
-                "sessions": [{"name": "Codex", "state": "error", "updated_at": "--:--"}],
-                "latest_reply": "Unavailable",
-                "activity": [],
-            }
+            return {"_source_status": "error", "_error": str(exc), "sessions": [{"id": "", "name": "Codex", "state": "error", "updated_at": "--:--", "selected": True}], "latest_reply": "Unavailable", "activity": []}
 
-    def codex_sessions(self) -> list[dict[str, str]]:
-        rows = read_jsonl_tail(self.codex_session_index, max_lines=12)
+    def codex_session_id(self, path: Path | None) -> str | None:
+        if not path:
+            return None
+        match = re.search(r"([0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12})", path.name, re.IGNORECASE)
+        return match.group(1) if match else path.stem
+
+    def codex_session_files(self, limit: int | None = None) -> list[Path]:
+        pattern = str(self.codex_sessions_root / "**" / "*.jsonl")
+        files = sorted((Path(item) for item in glob.glob(pattern, recursive=True)), key=lambda item: item.stat().st_mtime, reverse=True)
+        return files[:limit] if limit else files
+
+    def codex_sessions(self) -> list[dict[str, Any]]:
+        index = {str(row.get("id")): row for row in read_jsonl_tail(self.codex_session_index, max_lines=80) if row.get("id")}
         sessions = []
-        for row in rows[-4:]:
-            updated = parse_iso(row.get("updated_at"))
-            name = truncate(str(row.get("thread_name") or row.get("id") or "Codex"), 28)
-            sessions.append(
-                {
-                    "name": name,
-                    "state": "active" if updated and (now_local() - updated).total_seconds() < 7200 else "idle",
-                    "updated_at": updated.strftime("%H:%M") if updated else "--:--",
-                }
-            )
-        return list(reversed(sessions))
+        for path in self.codex_session_files(limit=4):
+            session_id = self.codex_session_id(path) or path.stem
+            row = index.get(session_id, {})
+            updated = dt.datetime.fromtimestamp(path.stat().st_mtime).astimezone()
+            name = truncate(str(row.get("thread_name") or f"Codex {session_id[:6]}"), 28)
+            sessions.append({"id": session_id, "name": name, "state": "active" if (now_local() - updated).total_seconds() < 7200 else "idle", "updated_at": updated.strftime("%H:%M"), "selected": False})
+        return sessions
+
+    def codex_session_file(self, session_id: str | None) -> Path | None:
+        if not session_id:
+            return self.latest_codex_session_file()
+        return next((path for path in self.codex_session_files() if self.codex_session_id(path) == session_id), None)
 
     def latest_codex_session_file(self) -> Path | None:
-        pattern = str(self.codex_sessions_root / "**" / "*.jsonl")
-        files = [Path(p) for p in glob.glob(pattern, recursive=True)]
-        if not files:
-            return None
-        return max(files, key=lambda p: p.stat().st_mtime)
-
+        files = self.codex_session_files(limit=1)
+        return files[0] if files else None
     def latest_codex_reply(self, rows: list[dict[str, Any]]) -> str:
         for row in reversed(rows):
             payload = row.get("payload")
@@ -686,7 +616,8 @@ class AgentBuddyHandler(SimpleHTTPRequestHandler):
         try:
             query = parse_qs(urlparse(self.path).query)
             agent = (query.get("agent") or ["codex"])[0]
-            state = self.state_builder.build(agent)
+            session_id = (query.get("session") or [None])[0]
+            state = self.state_builder.build(agent, session_id)
             status = 200
         except Exception as exc:
             state = {
