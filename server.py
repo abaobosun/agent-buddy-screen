@@ -146,11 +146,13 @@ class AgentBuddyState:
         if agent_state.get("_error"):
             errors.append(f"{agent}: {agent_state['_error']}")
 
+        project = agent_state.get("project") or project
         usage = agent_state.get("usage_today") or cc_state.get("usage_today") or self.empty_usage()
         used_tokens = safe_int(agent_state.get("used_tokens"))
         if not used_tokens:
             used_tokens = safe_int(usage.get("input_tokens")) + safe_int(usage.get("output_tokens"))
-        percent = min(100, round((used_tokens / max(1, self.context_limit)) * 100))
+        context_limit = safe_int(agent_state.get("context_limit"), self.context_limit)
+        percent = min(100, round((used_tokens / max(1, context_limit)) * 100))
 
         model = agent_state.get("model") or cc_state.get("model") or {
             "provider": "Unavailable",
@@ -185,7 +187,7 @@ class AgentBuddyState:
             "model": model,
             "context": {
                 "used_tokens": used_tokens,
-                "limit_tokens": self.context_limit,
+                "limit_tokens": context_limit,
                 "percent": percent,
                 "estimated": True,
             },
@@ -485,14 +487,16 @@ class AgentBuddyState:
             selected_id = self.codex_session_id(session_file) if session_file else None
             latest_reply = "Unavailable"
             activity: list[dict[str, Any]] = []
+            metadata: dict[str, Any] = {}
             if session_file:
                 rows = read_jsonl_tail(session_file)
                 latest_reply = self.latest_codex_reply(rows)
                 activity = self.codex_activity(rows)
+                metadata = self.codex_session_metadata(rows)
             for session in sessions:
                 session["selected"] = session.get("id") == selected_id
             status = "ok" if session_file or sessions else "stale"
-            return {"_source_status": status, "_selected_session_id": selected_id, "sessions": sessions, "latest_reply": latest_reply, "activity": activity}
+            return {"_source_status": status, "_selected_session_id": selected_id, "sessions": sessions, "latest_reply": latest_reply, "activity": activity, **metadata}
         except Exception as exc:
             return {"_source_status": "error", "_error": str(exc), "sessions": [{"id": "", "name": "Codex", "state": "error", "updated_at": "--:--", "selected": True}], "latest_reply": "Unavailable", "activity": []}
 
@@ -526,6 +530,26 @@ class AgentBuddyState:
     def latest_codex_session_file(self) -> Path | None:
         files = self.codex_session_files(limit=1)
         return files[0] if files else None
+    def codex_session_metadata(self, rows: list[dict[str, Any]]) -> dict[str, Any]:
+        project = None
+        context_limit = 0
+        for row in rows:
+            payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+            if row.get("type") == "session_meta":
+                cwd = payload.get("cwd")
+                if cwd:
+                    project = {"name": Path(str(cwd)).name, "path": str(cwd), "branch": "--"}
+            value = payload.get("model_context_window") or payload.get("context_window")
+            if isinstance(value, dict):
+                value = value.get("max_tokens") or value.get("limit")
+            context_limit = context_limit or safe_int(value)
+        state: dict[str, Any] = {}
+        if project:
+            state["project"] = project
+        if context_limit:
+            state["context_limit"] = context_limit
+        return state
+
     def latest_codex_reply(self, rows: list[dict[str, Any]]) -> str:
         for row in reversed(rows):
             payload = row.get("payload")
