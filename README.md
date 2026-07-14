@@ -1,5 +1,7 @@
 # Agent Buddy Screen
 
+[中文](README_ZH.md) | English
+
 Local/LAN read-only status screen for a small Windows secondary display and e-ink reader.
 
 ## Run
