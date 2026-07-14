@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta http-equiv="Cache-Control" content="no-store" />
+    <title>Agent Buddy Portrait</title>
+    <link rel="stylesheet" href="/portrait.css" />
+  </head>
+  <body>
+    <main class="phone" aria-label="Agent Buddy portrait status screen">
+      <header class="topbar">
+        <div>
+          <div class="title">Agent Buddy</div>
+          <div class="subtitle" id="project-path">Loading...</div>
+        </div>
+        <div class="status-box">
+          <div id="clock">--:--:--</div>
+          <div class="status" id="status">loading</div>
+        </div>
+      </header>
+
+      <nav class="agent-tabs" aria-label="Agent selector">
+        <button class="agent-tab active" data-agent="codex">Codex</button>
+        <button class="agent-tab" data-agent="claude">Claude</button>
+        <button class="agent-tab" data-agent="hermes">Hermes</button>
+      </nav>
+
+      <section class="hero-card">
+        <div class="label">PROJECT</div>
+        <div class="project-name" id="project-name">Unavailable</div>
+        <div class="muted" id="project-branch">branch: --</div>
+      </section>
+
+      <section class="metric-grid">
+        <article class="metric-card wide">
+          <div class="label">MODEL</div>
+          <div class="metric-main" id="model-name">Unavailable</div>
+          <div class="muted" id="provider-name">provider</div>
+        </article>
+        <article class="metric-card">
+          <div class="label">CONTEXT</div>
+          <div class="metric-main mono" id="context-text">0 / 200K</div>
+          <div class="bar"><span id="context-bar"></span></div>
+        </article>
+        <article class="metric-card">
+          <div class="label">REQ</div>
+          <div class="big-number" id="requests">0</div>
+        </article>
+        <article class="metric-card">
+          <div class="label">TOKENS</div>
+          <div class="big-number" id="tokens">0</div>
+        </article>
+      </section>
+
+      <section class="panel">
+        <div class="label">SESSIONS</div>
+        <div class="session-list" id="sessions"></div>
+      </section>
+
+      <section class="panel latest">
+        <div class="label">LATEST REPLY</div>
+        <div class="reply" id="latest-reply">Loading...</div>
+      </section>
+
+      <section class="panel activity-panel">
+        <div class="label">ACTIVITY</div>
+        <div class="activity-list" id="activity"></div>
+      </section>
+
+      <footer class="footer" id="sources">sources loading | refresh 5s</footer>
+    </main>
+    <script src="/portrait.js?v=20260708-es5"></script>
+  </body>
+</html>
