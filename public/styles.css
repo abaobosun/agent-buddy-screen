@@ -35,7 +35,7 @@ body {
   transform-origin: 0 0;
   background: var(--bg);
   display: grid;
-  grid-template-rows: 22px 34px 26px minmax(34px, 1.2fr) minmax(20px, 0.8fr) 10px;
+  grid-template-rows: 22px 34px 26px minmax(54px, 1fr) 10px;
   overflow: hidden;
 }
 
@@ -209,7 +209,7 @@ body {
   line-height: 1.2;
   font-weight: 400;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 5;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
