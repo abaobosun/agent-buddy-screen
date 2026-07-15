@@ -86,6 +86,15 @@
     var model = state.model || {};
     var context = state.context || {};
     var usage = state.usage_today || {};
+    var labels = state.labels || {};
+    var metrics = state.metrics || {};
+
+    setText("project-label", labels.project || "PROJECT");
+    setText("model-label", labels.model || "MODEL");
+    setText("context-label", labels.context || "CONTEXT");
+    setText("requests-label", labels.requests || "REQ");
+    setText("tokens-label", labels.tokens || "TOKENS");
+    setText("latest-reply-label", labels.latest_reply || "LATEST REPLY");
 
     setText("clock", app.updated_at || "--:--:--");
     var status = byId("status");
@@ -96,10 +105,10 @@
 
     setText("project-path", project.path || "");
     setText("project-name", project.name || "Unavailable");
-    setText("project-branch", "branch: " + (project.branch || "--"));
+    setText("project-branch", project.detail || ("branch: " + (project.branch || "--")));
     setText("model-name", model.model || "Unavailable");
     setText("provider-name", (model.provider || "provider") + " | " + (model.app_type || "agent"));
-    setText("context-text", formatNumber(context.used_tokens || 0) + " / " + formatNumber(context.limit_tokens || 200000));
+    setText("context-text", context.display_text || (formatNumber(context.used_tokens || 0) + " / " + formatNumber(context.limit_tokens || 200000)));
 
     var bar = byId("context-bar");
     if (bar) {
@@ -107,8 +116,8 @@
       bar.style.width = pct + "%";
     }
 
-    setText("requests", usage.requests == null ? 0 : usage.requests);
-    setText("tokens", formatNumber((usage.input_tokens || 0) + (usage.output_tokens || 0)));
+    setText("requests", metrics.requests == null ? (usage.requests == null ? 0 : usage.requests) : metrics.requests);
+    setText("tokens", metrics.tokens == null ? formatNumber((usage.input_tokens || 0) + (usage.output_tokens || 0)) : metrics.tokens);
     setText("latest-reply", state.latest_reply || "Unavailable");
     selectedSessionId = app.selected_session_id || "";
     renderSessions(state.sessions || []);

@@ -15,7 +15,7 @@
         </div>
         <div class="agent-tabs" aria-label="Agent selector">
           <button class="agent-tab active" data-agent="codex">Codex</button>
-          <button class="agent-tab" data-agent="claude">Claude</button>
+          <button class="agent-tab" data-agent="notion">Notion</button>
           <button class="agent-tab" data-agent="hermes">Hermes</button>
         </div>
         <div class="top-meta">
@@ -26,17 +26,17 @@
 
       <section class="grid primary">
         <article class="panel project-panel">
-          <div class="label">PROJECT</div>
+          <div class="label" id="project-label">PROJECT</div>
           <div class="value" id="project-name">Unavailable</div>
           <div class="muted" id="project-branch">branch: --</div>
         </article>
         <article class="panel model-panel">
-          <div class="label">MODEL</div>
+          <div class="label" id="model-label">MODEL</div>
           <div class="value" id="model-name">Unavailable</div>
           <div class="muted" id="provider-name">provider: --</div>
         </article>
         <article class="panel context-panel">
-          <div class="label">CONTEXT</div>
+          <div class="label" id="context-label">CONTEXT</div>
           <div class="value compact" id="context-text">0 / 200K</div>
           <div class="bar" aria-hidden="true"><span id="context-bar"></span></div>
         </article>
@@ -48,22 +48,22 @@
           <div class="session-list" id="sessions"></div>
         </article>
         <article class="panel stat">
-          <div class="label">REQ</div>
+          <div class="label" id="requests-label">REQ</div>
           <div class="number" id="approved">0</div>
         </article>
         <article class="panel stat">
-          <div class="label">TOKENS</div>
+          <div class="label" id="tokens-label">TOKENS</div>
           <div class="number small-number" id="denied">0</div>
         </article>
       </section>
 
       <section class="panel latest">
-        <div class="label">LATEST REPLY</div>
+        <div class="label" id="latest-reply-label">LATEST REPLY</div>
         <div class="reply" id="latest-reply">Loading...</div>
       </section>
 
       <footer class="footer" id="sources">cc-switch loading | codex loading | refresh 5s</footer>
     </main>
-    <script src="/app.js?v=20260715-no-activity"></script>
+    <script src="/app.js?v=20260715-notion"></script>
   </body>
 </html>

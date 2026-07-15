@@ -10,6 +10,8 @@ import re
 import sqlite3
 import subprocess
 import time
+import urllib.error
+import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -20,6 +22,8 @@ APP_NAME = "Agent Buddy"
 DEFAULT_HOST = "0.0.0.0"
 DEFAULT_PORT = 8765
 DEFAULT_CONTEXT_LIMIT = 200_000
+DEFAULT_NOTION_DATA_SOURCE_ID = "6023633d-dc41-4b44-a1ed-64862fb83b72"
+NOTION_API_VERSION = "2026-03-11"
 ROOT = Path(__file__).resolve().parent
 PUBLIC = ROOT / "public"
 
@@ -106,34 +110,46 @@ class AgentBuddyState:
         self.codex_sessions_root = self.codex_root / "sessions"
         self.claude_project_dir = home / ".claude" / "projects" / "D--Cursor-code"
         self.hermes_root = Path(os.environ.get("LOCALAPPDATA", str(home / "AppData" / "Local"))) / "hermes"
+        self.notion_token = (
+            os.environ.get("NOTION_TOKEN")
+            or os.environ.get("NOTION_API_KEY")
+            or os.environ.get("NOTION_INTEGRATION_TOKEN")
+            or ""
+        ).strip()
+        self.notion_data_source_id = os.environ.get(
+            "NOTION_DATA_SOURCE_ID", DEFAULT_NOTION_DATA_SOURCE_ID
+        ).strip()
         self._state_cache: dict[tuple[str, str], tuple[float, dict[str, Any]]] = {}
         self._project_cache: tuple[float, dict[str, Any]] | None = None
 
     def build(self, agent: str = "codex", session_id: str | None = None) -> dict[str, Any]:
-        agent = agent if agent in {"codex", "claude", "hermes"} else "codex"
+        agent = agent if agent in {"codex", "notion", "hermes"} else "codex"
         cache_key = (agent, session_id or "")
         now = time.time()
         cached = self._state_cache.get(cache_key)
-        if cached and now - cached[0] < 5:
+        cache_ttl = 30 if agent == "notion" else 5
+        if cached and now - cached[0] < cache_ttl:
             return cached[1]
         state = self._build_uncached(agent, session_id)
         self._state_cache[cache_key] = (now, state)
         return state
 
     def _build_uncached(self, agent: str = "codex", session_id: str | None = None) -> dict[str, Any]:
-        agent = agent if agent in {"codex", "claude", "hermes"} else "codex"
+        agent = agent if agent in {"codex", "notion", "hermes"} else "codex"
         sources: dict[str, str] = {}
         errors: list[str] = []
 
         project = self.project_state()
-        cc_state = self.cc_switch_state()
-        sources["cc-switch"] = cc_state.pop("_source_status")
-        if cc_state.get("_error"):
-            errors.append(f"cc-switch: {cc_state['_error']}")
+        cc_state = {"usage_today": self.empty_usage()}
+        if agent != "notion":
+            cc_state = self.cc_switch_state()
+            sources["cc-switch"] = cc_state.pop("_source_status")
+            if cc_state.get("_error"):
+                errors.append(f"cc-switch: {cc_state['_error']}")
 
-        if agent == "claude":
-            agent_state = self.claude_state(session_id)
-            sources["claude"] = agent_state.pop("_source_status")
+        if agent == "notion":
+            agent_state = self.notion_state(session_id)
+            sources["notion"] = agent_state.pop("_source_status")
             project = agent_state.get("project") or project
         elif agent == "hermes":
             agent_state = self.hermes_state(session_id)
@@ -152,7 +168,10 @@ class AgentBuddyState:
         if not used_tokens:
             used_tokens = safe_int(usage.get("input_tokens")) + safe_int(usage.get("output_tokens"))
         context_limit = safe_int(agent_state.get("context_limit"), self.context_limit)
-        percent = min(100, round((used_tokens / max(1, context_limit)) * 100))
+        percent = safe_int(
+            agent_state.get("context_percent"),
+            min(100, round((used_tokens / max(1, context_limit)) * 100)),
+        )
 
         model = agent_state.get("model") or cc_state.get("model") or {
             "provider": "Unavailable",
@@ -169,6 +188,18 @@ class AgentBuddyState:
             item.pop("_sort", None)
 
         latest_reply = agent_state.get("latest_reply") or "Unavailable"
+        labels = agent_state.get("labels") or {
+            "project": "PROJECT",
+            "model": "MODEL",
+            "context": "CONTEXT",
+            "requests": "REQ",
+            "tokens": "TOKENS",
+            "latest_reply": "LATEST REPLY",
+        }
+        metrics = agent_state.get("metrics") or {
+            "requests": usage.get("requests", 0),
+            "tokens": safe_int(usage.get("input_tokens")) + safe_int(usage.get("output_tokens")),
+        }
         app_status = "live"
         if any(status == "error" for status in sources.values()):
             app_status = "error"
@@ -190,8 +221,11 @@ class AgentBuddyState:
                 "limit_tokens": context_limit,
                 "percent": percent,
                 "estimated": True,
+                "display_text": agent_state.get("context_display"),
             },
             "usage_today": usage,
+            "labels": labels,
+            "metrics": metrics,
             "sessions": agent_state.get("sessions") or [
                 {"name": agent.title(), "state": "unavailable", "updated_at": "--:--"}
             ],
@@ -201,6 +235,215 @@ class AgentBuddyState:
             "sources": sources,
             "errors": errors[:3],
         }
+
+    def notion_state(self, session_id: str | None = None) -> dict[str, Any]:
+        labels = {
+            "project": "SESSION",
+            "model": "SOURCE",
+            "context": "STATUS",
+            "requests": "CHANGE",
+            "tokens": "TODO",
+            "latest_reply": "DECISION",
+        }
+        base = {
+            "labels": labels,
+            "model": {"provider": "Notion", "model": "Notion AI", "app_type": "session-log"},
+            "usage_today": self.empty_usage(),
+            "metrics": {"requests": "--", "tokens": "--"},
+            "context_display": "Unavailable",
+            "context_percent": 0,
+        }
+        if not self.notion_token:
+            return {
+                **base,
+                "_source_status": "error",
+                "_error": "NOTION_TOKEN is not configured",
+                "project": {
+                    "name": "Notion 未连接",
+                    "path": "Session Log 会话日志",
+                    "detail": "需要配置 Integration Token",
+                    "branch": "--",
+                },
+                "sessions": [{
+                    "id": "",
+                    "name": "Configure Notion",
+                    "state": "error",
+                    "updated_at": "",
+                    "selected": True,
+                }],
+                "latest_reply": "请配置 NOTION_TOKEN，并把 Session Log 数据库共享给该 Notion Integration。",
+                "activity": [],
+            }
+
+        try:
+            rows = self.query_notion_sessions()
+        except (OSError, ValueError) as exc:
+            return {
+                **base,
+                "_source_status": "error",
+                "_error": str(exc),
+                "project": {
+                    "name": "Notion 读取失败",
+                    "path": "Session Log 会话日志",
+                    "detail": "检查连接权限",
+                    "branch": "--",
+                },
+                "sessions": [{
+                    "id": "",
+                    "name": "Notion unavailable",
+                    "state": "error",
+                    "updated_at": "",
+                    "selected": True,
+                }],
+                "latest_reply": "Notion 数据暂时不可用，请检查 Integration 权限和数据源 ID。",
+                "activity": [],
+            }
+
+        if not rows:
+            return {
+                **base,
+                "_source_status": "stale",
+                "project": {
+                    "name": "暂无会话日志",
+                    "path": "Session Log 会话日志",
+                    "detail": "database empty",
+                    "branch": "--",
+                },
+                "sessions": [],
+                "latest_reply": "Notion Session Log 中还没有记录。",
+                "activity": [],
+            }
+
+        selected = next((row for row in rows if row["id"] == session_id), rows[0])
+        selected_id = selected["id"]
+        status = selected["status"] or "未设置"
+        completed = "完结" in status or "完成" in status
+        in_progress = "进行" in status
+        context_percent = 100 if completed else 55 if in_progress else 0
+        sessions = [
+            {
+                "id": row["id"],
+                "name": truncate(row["title"], 28),
+                "state": "active" if "进行" in row["status"] else "idle",
+                "updated_at": row["date"][5:] if len(row["date"]) >= 10 else row["updated_at"],
+                "selected": row["id"] == selected_id,
+            }
+            for row in rows[:5]
+        ]
+        change = selected["change"]
+        todo = selected["todo"]
+        activity = []
+        for label, value in (("变更", change), ("待办", todo), ("主题", selected["topics"])):
+            if value:
+                activity.append({
+                    "time": selected["updated_at"],
+                    "text": f"{label}: {truncate(value, 46)}",
+                    "_sort": time.time(),
+                })
+
+        return {
+            **base,
+            "_source_status": "ok",
+            "_selected_session_id": selected_id,
+            "project": {
+                "name": truncate(selected["title"], 32),
+                "path": "Notion · Session Log 会话日志",
+                "detail": f"date: {selected['date'] or '--'}",
+                "branch": "--",
+            },
+            "context_display": status,
+            "context_percent": context_percent,
+            "metrics": {
+                "requests": "有" if change else "无",
+                "tokens": "有" if todo and todo != "无" else "无",
+            },
+            "sessions": sessions,
+            "latest_reply": truncate(selected["decision"] or "暂无结论/决策", 320),
+            "activity": activity,
+        }
+
+    def query_notion_sessions(self) -> list[dict[str, str]]:
+        url = f"https://api.notion.com/v1/data_sources/{self.notion_data_source_id}/query"
+        payload = json.dumps({
+            "page_size": 20,
+            "sorts": [{"property": "日期", "direction": "descending"}],
+        }).encode("utf-8")
+        request = urllib.request.Request(
+            url,
+            data=payload,
+            method="POST",
+            headers={
+                "Authorization": f"Bearer {self.notion_token}",
+                "Notion-Version": NOTION_API_VERSION,
+                "Content-Type": "application/json",
+                "User-Agent": "Agent-Buddy-Screen/1.0",
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=8) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            try:
+                message = json.loads(detail).get("message") or detail
+            except json.JSONDecodeError:
+                message = detail
+            raise OSError(f"Notion HTTP {exc.code}: {truncate(str(message), 120)}") from exc
+        except urllib.error.URLError as exc:
+            raise OSError(f"Notion network error: {exc.reason}") from exc
+        except json.JSONDecodeError as exc:
+            raise ValueError("Notion returned invalid JSON") from exc
+
+        results = data.get("results") if isinstance(data, dict) else None
+        if not isinstance(results, list):
+            raise ValueError("Notion response has no results")
+        return [self.parse_notion_page(page) for page in results if isinstance(page, dict)]
+
+    def parse_notion_page(self, page: dict[str, Any]) -> dict[str, str]:
+        properties = page.get("properties") if isinstance(page.get("properties"), dict) else {}
+        date_value = self.notion_property(properties.get("日期"), "date")
+        updated = parse_iso(str(page.get("last_edited_time") or ""))
+        return {
+            "id": str(page.get("id") or ""),
+            "title": self.notion_property(properties.get("会话"), "title") or "Untitled session",
+            "date": date_value,
+            "status": self.notion_property(properties.get("状态"), "status"),
+            "topics": self.notion_property(properties.get("主题"), "multi_select"),
+            "decision": self.notion_property(properties.get("结论/决策"), "rich_text"),
+            "change": self.notion_property(properties.get("变更"), "rich_text"),
+            "todo": self.notion_property(properties.get("待办"), "rich_text"),
+            "url": str(page.get("url") or ""),
+            "updated_at": updated.strftime("%H:%M") if updated else "--:--",
+        }
+
+    def notion_property(self, prop: Any, kind: str) -> str:
+        if not isinstance(prop, dict):
+            return ""
+        if kind in {"title", "rich_text"}:
+            parts = prop.get(kind)
+            if not isinstance(parts, list):
+                return ""
+            return "".join(
+                str(item.get("plain_text") or "")
+                for item in parts
+                if isinstance(item, dict)
+            ).strip()
+        if kind == "date":
+            value = prop.get("date")
+            return str(value.get("start") or "") if isinstance(value, dict) else ""
+        if kind == "status":
+            value = prop.get("status")
+            return str(value.get("name") or "") if isinstance(value, dict) else ""
+        if kind == "multi_select":
+            values = prop.get("multi_select")
+            if not isinstance(values, list):
+                return ""
+            return ", ".join(
+                str(value.get("name") or "")
+                for value in values
+                if isinstance(value, dict)
+            )
+        return ""
 
     def project_state(self) -> dict[str, Any]:
         now = time.time()

@@ -22,33 +22,33 @@
 
       <nav class="agent-tabs" aria-label="Agent selector">
         <button class="agent-tab active" data-agent="codex">Codex</button>
-        <button class="agent-tab" data-agent="claude">Claude</button>
+        <button class="agent-tab" data-agent="notion">Notion</button>
         <button class="agent-tab" data-agent="hermes">Hermes</button>
       </nav>
 
       <section class="hero-card">
-        <div class="label">PROJECT</div>
+        <div class="label" id="project-label">PROJECT</div>
         <div class="project-name" id="project-name">Unavailable</div>
         <div class="muted" id="project-branch">branch: --</div>
       </section>
 
       <section class="metric-grid">
         <article class="metric-card wide">
-          <div class="label">MODEL</div>
+          <div class="label" id="model-label">MODEL</div>
           <div class="metric-main" id="model-name">Unavailable</div>
           <div class="muted" id="provider-name">provider</div>
         </article>
         <article class="metric-card">
-          <div class="label">CONTEXT</div>
+          <div class="label" id="context-label">CONTEXT</div>
           <div class="metric-main mono" id="context-text">0 / 200K</div>
           <div class="bar"><span id="context-bar"></span></div>
         </article>
         <article class="metric-card">
-          <div class="label">REQ</div>
+          <div class="label" id="requests-label">REQ</div>
           <div class="big-number" id="requests">0</div>
         </article>
         <article class="metric-card">
-          <div class="label">TOKENS</div>
+          <div class="label" id="tokens-label">TOKENS</div>
           <div class="big-number" id="tokens">0</div>
         </article>
       </section>
@@ -59,7 +59,7 @@
       </section>
 
       <section class="panel latest">
-        <div class="label">LATEST REPLY</div>
+        <div class="label" id="latest-reply-label">LATEST REPLY</div>
         <div class="reply" id="latest-reply">Loading...</div>
       </section>
 
@@ -70,6 +70,6 @@
 
       <footer class="footer" id="sources">sources loading | refresh 5s</footer>
     </main>
-    <script src="/portrait.js?v=20260714-sessions"></script>
+    <script src="/portrait.js?v=20260715-notion"></script>
   </body>
 </html>

@@ -84,6 +84,15 @@ const renderState = (state) => {
   const model = state.model || {};
   const context = state.context || {};
   const usage = state.usage_today || {};
+  const labels = state.labels || {};
+  const metrics = state.metrics || {};
+
+  setText("project-label", labels.project || "PROJECT");
+  setText("model-label", labels.model || "MODEL");
+  setText("context-label", labels.context || "CONTEXT");
+  setText("requests-label", labels.requests || "REQ");
+  setText("tokens-label", labels.tokens || "TOKENS");
+  setText("latest-reply-label", labels.latest_reply || "LATEST REPLY");
 
   setText("clock", app.updated_at || "--:--:--");
   const status = $("status");
@@ -94,21 +103,21 @@ const renderState = (state) => {
 
   setText("project-path", project.path || "");
   setText("project-name", project.name || "Unavailable");
-  setText("project-branch", `branch: ${project.branch || "--"}`);
+  setText("project-branch", project.detail || `branch: ${project.branch || "--"}`);
 
   setText("model-name", model.model || "Unavailable");
   setText("provider-name", `${model.provider || "provider"} | ${model.app_type || "agent"}`);
 
   const used = Number(context.used_tokens || 0);
   const limit = Number(context.limit_tokens || 200000);
-  setText("context-text", `${formatNumber(used)} / ${formatNumber(limit)}`);
+  setText("context-text", context.display_text || `${formatNumber(used)} / ${formatNumber(limit)}`);
   const bar = $("context-bar");
   if (bar) bar.style.width = `${Math.max(0, Math.min(100, Number(context.percent || 0)))}%`;
 
   selectedSessionId = app.selected_session_id || "";
   renderSessions(state.sessions || []);
-  setText("approved", usage.requests ?? 0);
-  setText("denied", formatNumber((usage.input_tokens || 0) + (usage.output_tokens || 0)));
+  setText("approved", metrics.requests ?? usage.requests ?? 0);
+  setText("denied", metrics.tokens ?? formatNumber((usage.input_tokens || 0) + (usage.output_tokens || 0)));
   setText("latest-reply", state.latest_reply || "Unavailable");
   renderActivity(state.activity || []);
   renderSources(state);
