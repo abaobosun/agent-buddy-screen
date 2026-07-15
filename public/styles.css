@@ -272,6 +272,6 @@ body {
 }
 .sessions-panel .session-list {
   gap: 0;
-  font-size: 6px;
-  line-height: 1.05;
+  font-size: 7px;
+  line-height: 1.12;
 }
