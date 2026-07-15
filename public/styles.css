@@ -35,7 +35,7 @@ body {
   transform-origin: 0 0;
   background: var(--bg);
   display: grid;
-  grid-template-rows: 22px 34px 26px minmax(54px, 1fr) 10px;
+  grid-template-rows: 22px 25px 35px minmax(54px, 1fr) 10px;
   overflow: hidden;
 }
 
@@ -259,3 +259,19 @@ body {
   outline: 1px solid var(--accent);
 }
 .session.selected::before { content: "> "; color: var(--accent); }
+/* Keep the landscape session list dense enough for four selectable sessions. */
+.primary .panel {
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+.primary .label,
+.sessions-panel .label { margin-bottom: 1px; }
+.sessions-panel {
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+.sessions-panel .session-list {
+  gap: 0;
+  font-size: 6px;
+  line-height: 1.05;
+}

@@ -33,7 +33,7 @@ const renderSessions = (sessions = []) => {
     root.innerHTML = '<div class="session">Codex unavailable</div>';
     return;
   }
-  for (const session of sessions.slice(0, 3)) {
+  for (const session of sessions.slice(0, 4)) {
     const item = document.createElement("button");
     const selected = Boolean(session.selected || (session.id && session.id === selectedSessionId));
     item.type = "button";
