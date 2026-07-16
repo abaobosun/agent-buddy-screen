@@ -21,6 +21,7 @@ Open <http://127.0.0.1:8766> on this PC. From another trusted device on the same
 
 - Horizontal secondary-display view: `/`
 - Compact e-ink portrait view: `/portrait`
+- Large-text legacy Kindle view: `/kindle`
 
 ## Data Sources
 

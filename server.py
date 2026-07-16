@@ -877,6 +877,8 @@ class AgentBuddyHandler(SimpleHTTPRequestHandler):
             self.path = "/index.html"
         elif path == "/portrait":
             self.path = "/portrait.html"
+        elif path == "/kindle":
+            self.path = "/kindle.html"
         super().do_GET()
 
     def handle_state(self) -> None:

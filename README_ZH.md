@@ -21,6 +21,7 @@ python .\server.py --host 0.0.0.0 --port 8766
 
 - 横向副屏页面：`/`
 - 紧凑型墨水屏竖屏页面：`/portrait`
+- Kindle 大字体兼容页面：`/kindle`
 
 ## 数据来源
 

@@ -1,0 +1,266 @@
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+  background: #e6e8e5;
+  color: #111;
+  font-family: Arial, "Microsoft YaHei", sans-serif;
+  font-size: 30px;
+}
+
+button {
+  font-family: Arial, "Microsoft YaHei", sans-serif;
+}
+
+.kindle-page {
+  width: 100%;
+  min-height: 100%;
+  border: 2px solid #111;
+  background: #e6e8e5;
+}
+
+.clearfix:after {
+  display: block;
+  clear: both;
+  content: "";
+}
+
+.topbar {
+  padding: 22px 24px 18px;
+  border-bottom: 2px solid #111;
+}
+
+.brand {
+  float: left;
+  width: 72%;
+}
+
+.top-status {
+  float: right;
+  width: 28%;
+  text-align: right;
+  font-family: monospace;
+  font-size: 28px;
+  line-height: 1.25;
+}
+
+.title {
+  font-size: 46px;
+  line-height: 1.05;
+  font-weight: bold;
+}
+
+.subtitle,
+.muted,
+.footer {
+  color: #333;
+}
+
+.subtitle {
+  margin-top: 8px;
+  overflow: hidden;
+  font-size: 25px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status {
+  margin-top: 5px;
+  font-size: 24px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.tabs,
+.metrics {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.tabs td {
+  width: 33.333%;
+  padding: 0;
+  border-right: 2px solid #111;
+  border-bottom: 2px solid #111;
+}
+
+.tabs td:last-child {
+  border-right: 0;
+}
+
+.agent-tab {
+  width: 100%;
+  min-height: 70px;
+  padding: 8px 4px;
+  border: 0;
+  background: transparent;
+  color: #222;
+  font-size: 31px;
+}
+
+.agent-tab.active {
+  background: #bbb;
+  color: #000;
+  font-weight: bold;
+  text-decoration: underline;
+}
+
+.section {
+  padding: 20px 24px;
+  border-bottom: 2px solid #111;
+}
+
+.label {
+  margin-bottom: 8px;
+  color: #222;
+  font-family: monospace;
+  font-size: 23px;
+  font-weight: bold;
+}
+
+.project-name {
+  font-size: 40px;
+  line-height: 1.15;
+}
+
+.muted {
+  margin-top: 6px;
+  font-size: 25px;
+  line-height: 1.25;
+}
+
+.metrics td {
+  width: 50%;
+  padding: 18px 24px;
+  vertical-align: top;
+  border-right: 2px solid #111;
+  border-bottom: 2px solid #111;
+}
+
+.metrics td:last-child {
+  border-right: 0;
+}
+
+.metric-value {
+  font-size: 34px;
+  line-height: 1.15;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+.metric-number {
+  font-family: monospace;
+  font-size: 42px;
+  line-height: 1.1;
+}
+
+.mono {
+  font-family: monospace;
+}
+
+.bar {
+  width: 100%;
+  height: 16px;
+  margin-top: 14px;
+  border: 2px solid #111;
+}
+
+.bar span {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: #111;
+}
+
+.session {
+  display: block;
+  width: 100%;
+  min-height: 50px;
+  margin: 0;
+  padding: 7px 8px;
+  border: 0;
+  border-bottom: 1px solid #777;
+  background: transparent;
+  color: #111;
+  font-size: 30px;
+  line-height: 1.25;
+  text-align: left;
+}
+
+.session:before {
+  content: "- ";
+}
+
+.session.active:before,
+.session.selected:before {
+  content: "> ";
+}
+
+.session.selected {
+  background: #c4c6c3;
+  font-weight: bold;
+}
+
+.reply {
+  font-size: 31px;
+  line-height: 1.45;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+.activity-list {
+  font-family: monospace, "Microsoft YaHei";
+  font-size: 26px;
+  line-height: 1.35;
+}
+
+.activity-item {
+  margin-bottom: 7px;
+}
+
+.activity-time {
+  color: #333;
+}
+
+.footer {
+  padding: 14px 24px 18px;
+  font-family: monospace;
+  font-size: 21px;
+  line-height: 1.25;
+}
+
+@media screen and (max-width: 700px) {
+  html,
+  body {
+    font-size: 26px;
+  }
+
+  .title {
+    font-size: 40px;
+  }
+
+  .agent-tab {
+    font-size: 27px;
+  }
+
+  .project-name {
+    font-size: 35px;
+  }
+
+  .metric-value {
+    font-size: 29px;
+  }
+
+  .session,
+  .reply {
+    font-size: 27px;
+  }
+}
