@@ -118,6 +118,11 @@ const renderState = (state) => {
   renderSessions(state.sessions || []);
   setText("approved", metrics.requests ?? usage.requests ?? 0);
   setText("denied", metrics.tokens ?? formatNumber((usage.input_tokens || 0) + (usage.output_tokens || 0)));
+  const textMetrics = metrics.display_mode === "text";
+  const approved = $("approved");
+  const denied = $("denied");
+  if (approved) approved.classList.toggle("text-number", textMetrics);
+  if (denied) denied.classList.toggle("text-number", textMetrics);
   setText("latest-reply", state.latest_reply || "Unavailable");
   renderActivity(state.activity || []);
   renderSources(state);

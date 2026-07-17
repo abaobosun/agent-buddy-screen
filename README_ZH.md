@@ -60,9 +60,9 @@ Notion 页面中的字段对应关系：
 - `SESSION`：当前会话标题
 - `SOURCE`：Notion AI / Session Log
 - `STATUS`：进行中或已完结
-- `CHANGE`：当前记录是否填写了“变更”
-- `TODO`：当前记录是否还有“待办”
+- `TOPIC`：当前记录的“主题”
 - `DECISION`：当前记录的“结论/决策”
+- `DETAILS`：当前会话页面正文中的详细对话信息
 
 ## 致谢
 

@@ -241,15 +241,15 @@ class AgentBuddyState:
             "project": "SESSION",
             "model": "SOURCE",
             "context": "STATUS",
-            "requests": "CHANGE",
-            "tokens": "TODO",
-            "latest_reply": "DECISION",
+            "requests": "TOPIC",
+            "tokens": "DECISION",
+            "latest_reply": "DETAILS",
         }
         base = {
             "labels": labels,
             "model": {"provider": "Notion", "model": "Notion AI", "app_type": "session-log"},
             "usage_today": self.empty_usage(),
-            "metrics": {"requests": "--", "tokens": "--"},
+            "metrics": {"requests": "--", "tokens": "--", "display_mode": "text"},
             "context_display": "Unavailable",
             "context_percent": 0,
         }
@@ -332,6 +332,12 @@ class AgentBuddyState:
         ]
         change = selected["change"]
         todo = selected["todo"]
+        try:
+            details = self.query_notion_page_markdown(selected_id)
+            if not details:
+                details = selected["decision"] or "暂无对话详细信息"
+        except (OSError, ValueError):
+            details = selected["decision"] or "暂无对话详细信息"
         activity = []
         for label, value in (("变更", change), ("待办", todo), ("主题", selected["topics"])):
             if value:
@@ -354,13 +360,58 @@ class AgentBuddyState:
             "context_display": status,
             "context_percent": context_percent,
             "metrics": {
-                "requests": "有" if change else "无",
-                "tokens": "有" if todo and todo != "无" else "无",
+                "requests": selected["topics"] or "未设置",
+                "tokens": selected["decision"] or "暂无",
+                "display_mode": "text",
             },
             "sessions": sessions,
-            "latest_reply": truncate(selected["decision"] or "暂无结论/决策", 320),
+            "latest_reply": details,
             "activity": activity,
         }
+
+    def query_notion_page_markdown(self, page_id: str) -> str:
+        url = f"https://api.notion.com/v1/pages/{page_id}/markdown"
+        request = urllib.request.Request(
+            url,
+            method="GET",
+            headers={
+                "Authorization": f"Bearer {self.notion_token}",
+                "Notion-Version": NOTION_API_VERSION,
+                "User-Agent": "Agent-Buddy-Screen/1.0",
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=8) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            try:
+                message = json.loads(detail).get("message") or detail
+            except json.JSONDecodeError:
+                message = detail
+            raise OSError(f"Notion HTTP {exc.code}: {truncate(str(message), 120)}") from exc
+        except urllib.error.URLError as exc:
+            raise OSError(f"Notion network error: {exc.reason}") from exc
+        except json.JSONDecodeError as exc:
+            raise ValueError("Notion returned invalid page markdown JSON") from exc
+
+        markdown = data.get("markdown") if isinstance(data, dict) else None
+        if not isinstance(markdown, str):
+            raise ValueError("Notion response has no page markdown")
+        return self.notion_markdown_text(markdown)
+
+    def notion_markdown_text(self, markdown: str) -> str:
+        text = markdown.replace("\r\n", "\n")
+        text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+        text = re.sub(r"!\[([^\]]*)\]\([^)]+\)", r"[图片: \1]", text)
+        text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
+        text = re.sub(r"^#{1,4}\s*", "", text, flags=re.MULTILINE)
+        text = re.sub(r"^\s*[-*+]\s+", "• ", text, flags=re.MULTILINE)
+        text = re.sub(r"[*_]{1,2}([^*_]+)[*_]{1,2}", r"\1", text)
+        text = text.replace("`", "")
+        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        value = "\n".join(lines)
+        return value if len(value) <= 2000 else value[:1997].rstrip() + "..."
 
     def query_notion_sessions(self) -> list[dict[str, str]]:
         url = f"https://api.notion.com/v1/data_sources/{self.notion_data_source_id}/query"

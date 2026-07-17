@@ -158,6 +158,13 @@
         formatNumber((usage.input_tokens || 0) + (usage.output_tokens || 0)) :
         metrics.tokens
     );
+    if (metrics.display_mode === "text") {
+      addClass(byId("requests"), "text-number");
+      addClass(byId("tokens"), "text-number");
+    } else {
+      removeClass(byId("requests"), "text-number");
+      removeClass(byId("tokens"), "text-number");
+    }
     setText("latest-reply", state.latest_reply || "Unavailable");
 
     bar = byId("context-bar");

@@ -275,3 +275,22 @@ body {
   font-size: 7px;
   line-height: 1.12;
 }
+.number.text-number {
+  display: -webkit-box;
+  overflow: hidden;
+  font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+  font-size: 6px;
+  line-height: 1.12;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.small-number.text-number {
+  font-size: 6px;
+}
+
+.reply {
+  white-space: pre-wrap;
+}

@@ -118,6 +118,16 @@
 
     setText("requests", metrics.requests == null ? (usage.requests == null ? 0 : usage.requests) : metrics.requests);
     setText("tokens", metrics.tokens == null ? formatNumber((usage.input_tokens || 0) + (usage.output_tokens || 0)) : metrics.tokens);
+    var textMetrics = metrics.display_mode === "text";
+    var requests = byId("requests");
+    var tokens = byId("tokens");
+    if (textMetrics) {
+      addClass(requests, "text-number");
+      addClass(tokens, "text-number");
+    } else {
+      removeClass(requests, "text-number");
+      removeClass(tokens, "text-number");
+    }
     setText("latest-reply", state.latest_reply || "Unavailable");
     selectedSessionId = app.selected_session_id || "";
     renderSessions(state.sessions || []);

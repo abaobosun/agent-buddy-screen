@@ -147,3 +147,17 @@ body {
   outline: 1px solid var(--line);
 }
 .session.selected::before { content: "> "; color: var(--text); }
+.big-number.text-number {
+  display: -webkit-box;
+  overflow: hidden;
+  font-family: "Segoe UI", "Microsoft YaHei UI", sans-serif;
+  font-size: 16px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.reply {
+  white-space: pre-wrap;
+}
